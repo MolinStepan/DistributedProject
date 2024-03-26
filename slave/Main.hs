@@ -8,10 +8,6 @@ import           Network.Socket
 import           Network.Socket.ByteString
 import           System.Environment
 
--- test
--- test2
--- test3
--- test4
 -- placeholders
 talk s str = do
   sendAll s str
