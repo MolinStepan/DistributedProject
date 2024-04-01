@@ -2,18 +2,20 @@
 
 module Distributed.Master where
 
-import Network.Socket
-import Network.Socket.ByteString
-import Control.Exception
-import Control.Concurrent
-import Control.Monad
-import qualified Data.Set as Set
+import           Control.Concurrent
+import           Control.Exception
+import           Control.Monad
+import qualified Data.Set                  as Set
+import           Network.Socket
+import           Network.Socket.ByteString
+import           Parsers
 
 data Request = Request {
     requestId   :: Integer
   , requestType :: String
   , requestBody :: String
 }
+
 
 -- stolen placeholder
 runMaster :: ServiceName -> IO ()
@@ -36,6 +38,8 @@ runMaster port = do
     manageConnections requestPool sock  = forever $ bracketOnError (accept sock) (close . fst)
         $ \(conn, _peer) -> void $
             forkIO (handleServer conn requestPool)
+
+
 
 handleServer :: Socket -> Chan Request -> IO ()
 handleServer sock requestPool = do

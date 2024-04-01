@@ -1,15 +1,50 @@
 module Parsers where
 
-import           Data.ByteString
+import           Control.Applicative
+import qualified Data.ByteString            as B
+import           Data.ByteString.Internal
+import qualified Data.ByteString.Lazy.Char8 as C
+import           Data.Char
+import           Data.Word
+import           ParserType
 
-newtype Parser a = Parser { runParser :: ByteString -> Maybe (ByteString, a) }
+charPredicate_ :: (Char -> Bool) -> Parser ()
+charPredicate_ p = Parser $ \input -> let
+  l = w2c $ B.head input in
+  if not (B.null input) && p l
+  then Just (B.tail input, ())
+  else Nothing
 
-instance Functor Parser where
-  fmap f (Parser g) = Parser $ (fmap . fmap . fmap $ f) g
+charPredicate :: (Char -> Bool) -> Parser Char
+charPredicate p = Parser $ \input -> let
+  l = w2c $ B.head input in
+  if not (B.null input) && p l
+  then Just (B.tail input, l)
+  else Nothing
 
-instance Applicative Parser where
-  pure a = Parser $ \input -> Just (input, a)
-  f <*> g = Parser $ \input -> do
-    (rest, parsedFunc) <- runParser f input
-    (rest, parsedVal)  <- runParser g rest
-    return (rest, parsedFunc parsedVal)
+digit :: Parser Char
+digit = charPredicate isDigit
+
+integer :: Parser Integer
+integer = read <$> many digit
+
+int :: Parser Int
+int = read <$> many digit
+
+char_ :: Char -> Parser ()
+char_ l = charPredicate_ (== l)
+
+char :: Char -> Parser Char
+char l = charPredicate (== l)
+
+word :: ByteString -> Parser ByteString
+word w = packChars <$> traverse char (unpackChars w)
+
+word_ :: ByteString -> Parser ()
+word_ w = foldl (<>) () <$> traverse char_ (unpackChars w)
+
+wordS :: String -> Parser String
+wordS = traverse char
+
+wordS_ :: String -> Parser ()
+wordS_ w = foldl (<>) () <$> traverse char_ w

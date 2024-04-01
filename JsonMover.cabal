@@ -63,7 +63,9 @@ common std
                     , bytestring >= 0.12
                     , binary     == 0.8.9.1
     other-modules:    Distributed.Internal
+                    , ParserType
                     , Parsers
+                    , Tasks
 
 common postres
     build-depends:    hasql      >= 1.6.4.1
