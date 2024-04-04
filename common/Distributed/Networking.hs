@@ -1,6 +1,9 @@
-module Distributed.Internal (
+module Distributed.Networking (
     openMasterSocket
   , openSlaveSocket
+  , Socket
+  , send
+  , recv
   ) where
 
 import           Control.Concurrent
@@ -41,10 +44,7 @@ openSlaveSocket ip port = do
   Socket sock <$> newEmptyMVar
 
 recv :: Socket -> Int -> IO BS.ByteString
-recv (Socket sock _) n = B.recv sock n
+recv (Socket sock _) size = B.recv sock size
 
-
--- recv :: Socket -> Int -> String
--- recv = do
-
-s = B.recv
+send :: Socket -> BS.ByteString -> IO ()
+send = undefined

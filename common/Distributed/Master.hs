@@ -51,7 +51,7 @@ handleServer sock requestPool = do
 
   forkIO $ ping alive terminate socketMutex
   forkIO $ sendRequests currentlyProcessing requestPool stopping
-  forkIO $ acceptServerInfo currentlyProcessing alive stopping terminate
+  forkIO $ acceptSlaveInfo currentlyProcessing alive stopping terminate
   _ <- takeMVar terminate
   gracefulClose sock 5000
 
@@ -69,4 +69,8 @@ handleServer sock requestPool = do
 
     sendRequests currentlyProcessing requestPool stopping = undefined
 
-    acceptServerInfo currentlyProcessing alive stopping terminate = undefined
+    acceptSlaveInfo currentlyProcessing alive stopping terminate = do
+      inp <- recv sock 64
+      if inp == "OK"
+        then putMVar alive ()
+        else undefined -- there will be completed task or error message

@@ -13,7 +13,14 @@ data Answer = AInteger Integer
             | AString String
             | ABString B.ByteString
 
-newtype Task = Task { compute :: Input -> Answer }
+data Task = Task {
+    inputParser  :: Parser Input
+  , inputCoder :: Input -> B.ByteString
+  , compute      :: Input -> Answer
+  , answerParser :: Parser Answer
+  , answerCoder :: Answer -> B.ByteString
+  }
 
 allTasks :: [(B.ByteString, Task)]
 allTasks = []
+
