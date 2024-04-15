@@ -54,6 +54,7 @@ extra-doc-files:    CHANGELOG.md
 common warnings
     ghc-options: -Wall
                , -O2
+               , -threaded
 
 common std
     default-language: GHC2021
@@ -67,27 +68,31 @@ common std
                     , Parsers
                     , Tasks
                     , JsonObject
+                    , Distributed.Serializable
+                    , Serializers
 
-common postres
-    build-depends:    hasql      >= 1.6.4.1
+-- common postgres
+--     build-depends:    hasql      >= 1.6.4.1
 
-common redis
-    build-depends:    hedis      >= 0.15.0
+-- common redis
+--     build-depends:    hedis      >= 0.15.0
 
 library
     import:           std
     exposed-modules:
 
 executable Master
-    import:           std, redis
+    import:           std
     main-is:          Main.hs
     hs-source-dirs:   master
                     , common
     other-modules:    Distributed.Master
-
+                    , Distributed.Accepter
+                    , Writer
+                    , Reader
 
 executable Slave
-    import:           std, postres
+    import:           std
     main-is:          Main.hs
     hs-source-dirs:   slave
                     , common

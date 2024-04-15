@@ -1,22 +1,42 @@
-module Distributed.Networking (
-    openMasterSocket
+{-# LANGUAGE OverloadedStrings #-}
+
+module Distributed.Networking
+  ( openMasterSocket
   , openSlaveSocket
-  , Socket
+  , SocketPassive
+  , SocketM
   , send
   , recv
+  , close
+  , gracefulClose
   ) where
 
 import           Control.Concurrent
-import qualified Data.ByteString           as BS
+import qualified Data.ByteString           as B
 import qualified Network.Socket            as S
-import qualified Network.Socket.ByteString as B
+import qualified Network.Socket.ByteString as BS
 
-data Socket = Socket {
-    socket       :: S.Socket
-  , sendMutex    :: MVar ()
-}
+data SocketM = SocketM
+  { socket :: !S.Socket
+  , output :: !(Chan B.ByteString)
+  , outputManager :: ThreadId
+  }
 
-openMasterSocket :: String -> IO Socket
+newtype SocketPassive = SocketPassive
+  { sock :: S.Socket }
+
+manageOutputs :: Chan B.ByteString -> S.Socket -> IO ()
+manageOutputs chan sock = do
+  message <- readChan chan
+  if message /= "CLOSE"
+    then do
+      BS.send sock message
+      threadDelay 100_000
+      manageOutputs chan sock
+    else
+      S.gracefulClose sock 30_000_000
+
+openMasterSocket :: String -> IO SocketPassive
 openMasterSocket port = do
   address <- head <$> S.getAddrInfo
     (Just $ S.defaultHints {
@@ -29,22 +49,39 @@ openMasterSocket port = do
   S.withFdSocket sock S.setCloseOnExecIfNeeded
   S.bind sock $ S.addrAddress address
   S.listen sock 1024
-  Socket sock <$> newEmptyMVar
+  return $ SocketPassive sock
 
-openSlaveSocket :: String -> String -> IO Socket
+-- -- TODO rewrite
+-- accepter :: SocketPassive -> Chan Slave -> IO ()
+-- accepter sock slaveChan = forever $ E.bracketOnError (accept sock) (close . fst)
+--         $ \(conn, _peer) -> void $ ︎
+--             forkFinally (serverAction conn) (const $ gracefulClose conn 5000)
+
+openSlaveSocket :: String -> String -> IO SocketM
 openSlaveSocket ip port = do
   address <- head <$> S.getAddrInfo
     (Just $ S.defaultHints {
-        S.addrFlags = [S.AI_PASSIVE]   -- Passive
-      , S.addrSocketType = S.Stream }) -- TCP/IP
+      S.addrSocketType = S.Stream })   -- TCP/IP
     (Just ip)
     (Just port)
   sock <- S.openSocket address          -- Errors possible
   S.connect sock $ S.addrAddress address
-  Socket sock <$> newEmptyMVar
+  channel <- newChan
+  outMan  <- forkIO $ manageOutputs channel sock
+  return $ SocketM sock channel outMan
 
-recv :: Socket -> Int -> IO BS.ByteString
-recv (Socket sock _) size = B.recv sock size
+close :: SocketM -> IO ()
+close (SocketM sock _ worker) = do
+  killThread worker
+  S.close sock
 
-send :: Socket -> BS.ByteString -> IO ()
-send = undefined
+gracefulClose :: SocketM -> IO ()
+gracefulClose (SocketM _ chan _) = writeChan chan "CLOSE"
+
+
+recv :: SocketM -> Int -> IO B.ByteString
+recv (SocketM sock _ _) size = BS.recv sock size
+
+send :: SocketM -> B.ByteString -> IO ()
+send (SocketM _ chan _) msg =
+  writeChan chan msg

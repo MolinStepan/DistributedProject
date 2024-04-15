@@ -1,48 +1,43 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Main where
-
 import           Control.Concurrent
 import           Control.Exception         as E
 import           Control.Monad
-import           Network.Socket as S
-import           Network.Socket.ByteString
+import           Distributed.Master
+import Distributed.Networking
+import Reader
+import Writer
+import System.Environment
+import Distributed.Accepter
+
+-- TODO
+-- map of active connections
+-- task distribution (channel?)
+-- task id
+-- database result storage
 
 
--- placeholders
+
 main :: IO ()
-main = runTCPServer Nothing "3000" serverAction
-  where
-    serverAction sock = do
-      _ <- getLine
-      msg <- recv sock 1024
-      print msg
-      serverAction sock
+main = do
+  [port] <- getArgs
+
+  successTasks <- newChan :: IO (Chan RequestResult)
+  failedTasks  <- newChan :: IO (Chan RequestResult)
+  requestsPool <- newChan :: IO (Chan Request)
+  stop         <- newEmptyMVar :: IO (MVar ())
+  disconnectedServers <- newChan :: IO (Chan Slave)
+
+  sock <- openMasterSocket port
+
+  forkIO $ reader requestsPool
+  forkIO $ accepter sock requestsPool successTasks failedTasks disconnectedServers
+  forkIO $ successWriter successTasks
+  forkIO $ errorLogger failedTasks
+  forkIO $ disconnectLogger disconnectedServers 
+
+  _ <- takeMVar stop
+  print "Closed"
 
 
-runTCPServer :: Maybe HostName -> ServiceName -> (Socket -> IO a) -> IO a
-runTCPServer mhost port serverAction = do
-    addr <- resolve
-    E.bracket (open addr) close loop
-  where
-    resolve = do
-        let hints = defaultHints {
-                addrFlags = [AI_PASSIVE]
-              , addrSocketType = Stream
-              }
-        head <$> getAddrInfo (Just hints) mhost (Just port)
 
-    open addr = E.bracketOnError (openSocket addr) close $ \sock -> do
-        setSocketOption sock ReuseAddr 1
-        withFdSocket sock setCloseOnExecIfNeeded
-        bind sock $ addrAddress addr
-        listen sock 1024
-        return sock
-
-    loop sock = forever $ E.bracketOnError (accept sock) (close . fst)
-        $ \(conn, _peer) -> void $
-            forkFinally (serverAction conn) (const $ gracefulClose conn 5000)
--- let hints = defaultHints { addrFlags = [AI_NUMERICHOST, AI_NUMERICSERV], addrSocketType = Stream }
---   addr:_ <- getAddrInfo (Just hints) (Just "127.0.0.1") (Just "5000")
---   Network.Socket.bind sock (addrAddress addr)
---   getSocketName sock

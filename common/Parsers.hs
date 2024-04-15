@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Parsers (
-    Parser , runParser
+module Parsers
+  ( Parser (..)
   , emptyString
   , charPredicate
   , charPredicate_
@@ -22,7 +22,7 @@ import qualified Data.ByteString.Internal as I
 import           Data.Char
 import           Data.Word
 
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------
 
 newtype Parser a = Parser { runParser :: B.ByteString -> Maybe (B.ByteString, a) }
 
@@ -46,7 +46,7 @@ instance Monad Parser where
     (rest', parsedA) <- runParser pa input
     runParser (f parsedA) rest'
 
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------
 
 emptyString :: Parser ()
 emptyString = Parser $ \input ->
@@ -87,7 +87,7 @@ word_ w = Parser $ \input -> do
 
 whitespace_ :: Parser ()
 whitespace_ = do
-  _ <- wordPredicate I.isSpaceWord8
+  wordPredicate I.isSpaceWord8
   return ()
 
 char_ :: Char -> Parser ()
@@ -95,7 +95,7 @@ char_ c = charPredicate_ (== I.c2w c)
 
 whitespace1_ :: Parser ()
 whitespace1_ = do
-  _ <- wordPredicate1 I.isSpaceWord8
+  wordPredicate1 I.isSpaceWord8
   return ()
 
 int :: Integral a => Parser a
@@ -114,16 +114,16 @@ bs2afterDots w = snd $ B.foldl f (10.0, 0) w
 float :: Fractional a => Parser a
 float = do
   before <- fromIntegral <$> int
-  _ <- char_ '.'
+  char_ '.'
   after <- bs2afterDots <$> wordPredicate1 (\x -> x >= I.c2w '0' && x <= I.c2w '9')
   return (before + after)
 
 escapeString :: Parser B.ByteString
 escapeString =  do
-  _     <- char_ '\"'
+  char_ '\"'
   first <- wordPredicate $ \x -> not (x == I.c2w '\\' || x == I.c2w '\"')
   list  <- concat <$> many postslash
-  _     <- char_ '\"'
+  char_ '\"'
   return $ B.concat (first : list)
   where
     p x = x == I.c2w 'b' ||
@@ -134,16 +134,16 @@ escapeString =  do
           x == I.c2w '"' ||
           x == I.c2w '\\'
 
-    mc x | x == I.c2w 'b' = "\b"
-         | x == I.c2w 'f' = "\f"
-         | x == I.c2w 'n' = "\n"
-         | x == I.c2w 'r' = "\r"
-         | x == I.c2w 't' = "\t"
-         | x == I.c2w '"' = "\""
-         | x == I.c2w '\\'= "\\"
+    mc x | x == I.c2w 'b'   = "\b"
+         | x == I.c2w 'f'   = "\f"
+         | x == I.c2w 'n'   = "\n"
+         | x == I.c2w 'r'   = "\r"
+         | x == I.c2w 't'   = "\t"
+         | x == I.c2w '"'   = "\""
+         | x == I.c2w '\\'  = "\\"
 
     postslash = do
-      _    <- char_ '\\'
+      char_ '\\'
       esc  <- mc <$> charPredicate p
       rest <- wordPredicate $ \x -> not (x == I.c2w '\\' || x == I.c2w '\"')
       return [esc, rest]

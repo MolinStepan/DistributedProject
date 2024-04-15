@@ -2,11 +2,11 @@
 
 module JsonObject (
     JsonObject
-  , jsonObject
 ) where
 
 import           Control.Applicative
-import qualified Data.ByteString     as B
+import qualified Data.ByteString          as B
+import           Distributed.Serializable
 import           Parsers
 
 data JsonObject
@@ -19,8 +19,11 @@ data JsonObject
   | JsonArray [JsonObject]
   deriving (Show, Eq)
 
-jsonObject :: Parser JsonObject
-jsonObject = jsonFloat <|> jsonInt <|> jsonString <|> jsonArray <|> jsonCustomObject
+instance Serializable JsonObject where
+  parser     = jsonFloat <|> jsonInt <|> jsonBool <|> jsonString <|> jsonArray <|> jsonCustomObject <|> jsonNull
+  serializer = undefined --FIXME
+
+--------------------------------------------------------------------------------------------
 
 jsonInt :: Parser JsonObject
 jsonInt = JsonInt <$> int
@@ -51,8 +54,8 @@ jsonEmptyArray = JsonArray <$> do
 jsonNonEmptyArray :: Parser JsonObject
 jsonNonEmptyArray = JsonArray <$> do
   _     <- char_ '[' *> whitespace_
-  first <- jsonObject
-  rest  <- many $ whitespace_ *> char_ ',' *> whitespace_ *> jsonObject
+  first <- parser
+  rest  <- many $ whitespace_ *> char_ ',' *> whitespace_ *> parser
   _     <- whitespace_ *> char_ ']'
   return (first : rest)
 
@@ -66,10 +69,10 @@ jsonEmptyObject = JsonCustomObject <$> do
 
 jsonNonEmptyObject :: Parser JsonObject
 jsonNonEmptyObject = JsonCustomObject <$> do
-  _ <- char_ '{' *> whitespace_
+  _     <- char_ '{' *> whitespace_
   first <- parsePair
-  rest <- many $ whitespace_ *> char_ ',' *> whitespace_ *> parsePair
-  _ <- whitespace_ *> char_ '}'
+  rest  <- many $ whitespace_ *> char_ ',' *> whitespace_ *> parsePair
+  _     <- whitespace_ *> char_ '}'
   return (first : rest)
   where
-    parsePair = (,) <$> escapeString <* whitespace_ <* char_ ':' <* whitespace_ <*> jsonObject
+    parsePair = (,) <$> escapeString <* whitespace_ <* char_ ':' <* whitespace_ <*> parser

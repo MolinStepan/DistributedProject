@@ -2,3 +2,8 @@
 /LICENSE
 /dist-newstyle/
 /unused/*.hs
+*.~undo-tree~
+
+*.cabal#
+*.hs#
+*.hs~ 
