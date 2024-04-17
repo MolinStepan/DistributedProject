@@ -44,8 +44,8 @@ toProcess task input = do
   return $ serialize (compute task inp)
 
 allTasks :: [(B.ByteString, Process)]
-allTasks = (map . fmap) toProcess
-  [ ("Prime", Task checkPrime)
+allTasks = 
+  [ ("Prime", toProcess $ Task checkPrime)
   ]
 
 

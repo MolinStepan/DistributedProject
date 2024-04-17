@@ -12,12 +12,19 @@ import qualified Data.ByteString           as B
 import           Distributed.Master
 
 accepter :: SocketPassive
+         -> Int
          -> Chan Request
          -> Chan RequestResult
          -> Chan RequestResult
          -> Chan Slave
          -> IO ()
-accepter pool success error disconnected = undefined
+accepter (SocketPassive sock) port pool success error disconnected = forever $
+  E.bracketOnError (accept sock)
+    (close . fst)
+    \(conn, _) -> forkFinally (serverAction conn) (const $ gracefulClose conn port)       
+  where
+    serverAction =
+
 
 
 handleSlave :: SocketM -> Slave -> Chan Request -> Chan Slave -> IO ()

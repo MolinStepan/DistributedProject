@@ -1,6 +1,7 @@
 module Writer where
 
 import Control.Concurrent
+import Distributed.Networking
 import Distributed.Master
 
 successWriter :: Chan RequestResult -> IO ()

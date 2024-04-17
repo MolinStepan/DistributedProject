@@ -31,7 +31,7 @@ main = do
   sock <- openMasterSocket port
 
   forkIO $ reader requestsPool
-  forkIO $ accepter sock requestsPool successTasks failedTasks disconnectedServers
+  forkIO $ accepter sock (read port) requestsPool successTasks failedTasks disconnectedServers
   forkIO $ successWriter successTasks
   forkIO $ errorLogger failedTasks
   forkIO $ disconnectLogger disconnectedServers 

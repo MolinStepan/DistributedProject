@@ -3,8 +3,6 @@
 module Distributed.Serializable where
 
 import qualified Data.ByteString            as B
-import qualified Data.ByteString.Internal   as I
-import qualified Data.ByteString.Lazy.Char8 as C
 import           Parsers
 import           Serializers
 

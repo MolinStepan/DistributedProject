@@ -2,7 +2,7 @@ module Reader where
 
 import Control.Concurrent
 import System.IO
-import Distributed.Master
+import Distributed.Networking
 import qualified Data.ByteString.Char8 as C
 
 reader :: Chan Request -> IO ()

@@ -9,6 +9,8 @@ module Distributed.Networking
   , recv
   , close
   , gracefulClose
+  , Request (..)
+  , RequestResult (..)
   ) where
 
 import           Control.Concurrent
@@ -24,6 +26,17 @@ data SocketM = SocketM
 
 newtype SocketPassive = SocketPassive
   { sock :: S.Socket }
+
+data Request = Request
+  { requestId   :: Integer
+  , requestHeader :: B.ByteString
+  , requestBody :: B.ByteString
+  }
+
+data RequestResult = RequestResult
+  { request :: Request
+  , result  :: B.ByteString
+  } 
 
 manageOutputs :: Chan B.ByteString -> S.Socket -> IO ()
 manageOutputs chan sock = do

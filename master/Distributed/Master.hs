@@ -11,73 +11,8 @@ import qualified Data.ByteString           as B
 import qualified Control.Exception         as E
 import           Distributed.Networking
 
-data Request = Request
-  { requestId   :: Integer
-  , requestHeader :: B.ByteString
-  , requestBody :: B.ByteString
-  }
-
-data RequestResult = RequestResult
-  { request :: Request
-  , result  :: B.ByteString
-  } 
 
 newtype Slave = Slave { getInfo :: Int } deriving (Show, Eq)
-
-accepter :: SocketM -> Chan Request -> Chan RequestResult -> IO ()
-accepter = undefined
-
-handleSlave :: SocketM -> Slave -> Chan Request -> Chan Slave -> IO ()
-handleSlave sock id requestPool disconnectedServers = do
-  alive <- newMVar ()
-  currentlyProcessing <- newMVar Set.empty
-  terminate <- newEmptyMVar :: IO (MVar ())
-  stopping <- newEmptyMVar :: IO (MVar ())
-  socketMutex <- newEmptyMVar :: IO (MVar())
-
-  forkIO $ ping alive terminate socketMutex
-  forkIO $ sendRequests currentlyProcessing requestPool stopping
-  forkIO $ acceptSlaveInfo currentlyProcessing alive stopping terminate
-  _ <- takeMVar terminate
-  writeChan disconnectedServers id
-  gracefulClose sock
-
-  where
-    ping alive terminate socketMutex = do
-      putMVar socketMutex ()
-      send sock "Status"
-      _ <- takeMVar socketMutex
-      _ <- takeMVar alive
-      threadDelay 300_000_000
-      stop <- isEmptyMVar alive
-      if stop
-        then putMVar terminate ()
-        else ping alive terminate socketMutex
-
-    sendRequests currentlyProcessing requestPool stopping = undefined
-
-    acceptSlaveInfo currentlyProcessing alive stopping terminate = do
-      inp <- recv sock 64
-      if inp == "OK"
-        then putMVar alive ()
-        else undefined -- there will be completed task or error message
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
