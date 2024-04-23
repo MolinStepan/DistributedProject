@@ -7,3 +7,6 @@
 *.cabal#
 *.hs#
 *.hs~ 
+/result
+/todo.txt
+/todo.txt~

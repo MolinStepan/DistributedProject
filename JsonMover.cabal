@@ -90,6 +90,7 @@ executable Master
                     , Distributed.Accepter
                     , Writer
                     , Reader
+                    , Distributed.ProcessData
 
 executable Slave
     import:           std

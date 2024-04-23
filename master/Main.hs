@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-import           Control.Concurrent
 import           Control.Exception         as E
+import           Control.Concurrent
 import           Control.Monad
 import           Distributed.Master
 import Distributed.Networking
@@ -31,7 +31,7 @@ main = do
   sock <- openMasterSocket port
 
   forkIO $ reader requestsPool
-  forkIO $ accepter sock (read port) requestsPool successTasks failedTasks disconnectedServers
+  forkIO $ accepter sock (read port :: Int) requestsPool successTasks failedTasks disconnectedServers
   forkIO $ successWriter successTasks
   forkIO $ errorLogger failedTasks
   forkIO $ disconnectLogger disconnectedServers 

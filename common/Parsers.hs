@@ -2,6 +2,7 @@
 
 module Parsers
   ( Parser (..)
+  , unsafeRunParser
   , emptyString
   , charPredicate
   , charPredicate_
@@ -14,12 +15,15 @@ module Parsers
   , int
   , float
   , escapeString
+  , fixedSize
+  , fixedSizeP
+  , fixedSizeP'
 ) where
 
 import           Control.Applicative
 import qualified Data.ByteString          as B
 import qualified Data.ByteString.Internal as I
-import           Data.Char
+-- import           Data.Char
 import           Data.Word
 
 --------------------------------------------------------------------------------------------
@@ -47,6 +51,10 @@ instance Monad Parser where
     runParser (f parsedA) rest'
 
 --------------------------------------------------------------------------------------------
+unsafeRunParser :: Parser a -> B.ByteString -> (B.ByteString, a)
+unsafeRunParser (Parser f) str = case f str of
+  Just (rest, a) -> (rest, a)
+  Nothing        -> error "Unsafe parsing failed"
 
 emptyString :: Parser ()
 emptyString = Parser $ \input ->
@@ -147,3 +155,23 @@ escapeString =  do
       esc  <- mc <$> charPredicate p
       rest <- wordPredicate $ \x -> not (x == I.c2w '\\' || x == I.c2w '\"')
       return [esc, rest]
+
+fixedSize :: (B.ByteString -> a) -> Int -> Parser a
+fixedSize f n = Parser g
+  where
+    g inp | B.length inp < n = Nothing
+          | otherwise          = do
+              let (unparsed, rest) = B.splitAt n inp
+              return (rest, f unparsed)
+ 
+fixedSizeP :: Int -> Parser a -> Parser a
+fixedSizeP n p = fixedSizeP' n (p <* emptyString)
+
+fixedSizeP' :: Int -> Parser a -> Parser a
+fixedSizeP' n (Parser f) = Parser g
+  where
+    g inp | B.length inp < n = Nothing
+          | otherwise        = do
+              let (unparsed, rest) = B.splitAt n inp
+              (_, i) <- f unparsed
+              return (rest, i)

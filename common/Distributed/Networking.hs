@@ -3,13 +3,19 @@
 module Distributed.Networking
   ( openMasterSocket
   , openSlaveSocket
-  , SocketPassive
+  , SocketPassive (..)
+  , accept
+  , gclosep
+  , sendToSlave
+  , hear
   , SocketM
   , send
   , recv
+  , closep
   , close
   , gracefulClose
-  , Request (..)
+  , RequestHeader (..)
+  , SInt (..)
   , RequestResult (..)
   ) where
 
@@ -17,6 +23,9 @@ import           Control.Concurrent
 import qualified Data.ByteString           as B
 import qualified Network.Socket            as S
 import qualified Network.Socket.ByteString as BS
+import qualified Data.ByteString.Internal  as I
+import Distributed.Serializable
+import Parsers
 
 data SocketM = SocketM
   { socket :: !S.Socket
@@ -27,14 +36,31 @@ data SocketM = SocketM
 newtype SocketPassive = SocketPassive
   { sock :: S.Socket }
 
-data Request = Request
-  { requestId   :: Integer
-  , requestHeader :: B.ByteString
-  , requestBody :: B.ByteString
-  }
+newtype SInt = SInt Int deriving (Eq, Show, Ord)
+instance Serializable SInt where
+  parser = SInt <$> fixedSizeP 16 int
+  serialize (SInt x) = let
+    str = show x
+    n = 16 - length str
+    start = B.pack $ replicate n (I.c2w '0')
+    in B.concat [start, B.pack $ map I.c2w str]
 
+data RequestHeader = RequestHeader
+  { requestId   :: SInt
+  , taskName :: B.ByteString
+  , bodySize :: SInt
+  } deriving (Eq, Show)
+
+instance Serializable RequestHeader where 
+  serialize (RequestHeader id name len) = B.concat [serialize id, name, serialize len]
+  parser = do
+    tId <- parser
+    head <- fixedSize id 16
+    len <- parser
+    return $ RequestHeader tId head len
+  
 data RequestResult = RequestResult
-  { request :: Request
+  { request :: RequestHeader
   , result  :: B.ByteString
   } 
 
@@ -91,10 +117,18 @@ close (SocketM sock _ worker) = do
 gracefulClose :: SocketM -> IO ()
 gracefulClose (SocketM _ chan _) = writeChan chan "CLOSE"
 
-
-recv :: SocketM -> Int -> IO B.ByteString
 recv (SocketM sock _ _) size = BS.recv sock size
 
 send :: SocketM -> B.ByteString -> IO ()
 send (SocketM _ chan _) msg =
   writeChan chan msg
+
+accept (SocketPassive sock) = do
+  (s, a) <- S.accept sock
+  return (SocketPassive s, a)
+
+
+closep (SocketPassive sock) = S.close sock
+gclosep (SocketPassive sock) = S.gracefulClose sock
+sendToSlave (SocketPassive sock) = BS.send sock
+hear (SocketPassive sock) = BS.recv sock
