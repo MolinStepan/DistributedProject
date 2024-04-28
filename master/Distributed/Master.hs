@@ -4,17 +4,17 @@ module Distributed.Master where
 
 import           Control.Concurrent
 import           Control.Exception
+import qualified Control.Exception      as E
 import           Control.Monad
-import qualified Data.Set                  as Set
-import           Parsers
-import qualified Data.ByteString           as B
-import qualified Control.Exception         as E
+import qualified Data.ByteString        as B
+import qualified Data.Set               as Set
 import           Distributed.Networking
+import           Parsers
 
 
-newtype Slave = Slave { getInfo :: Int } deriving (Show, Eq)
-
-
+newtype Slave
+  = Slave { getInfo :: Int }
+  deriving (Eq, Show)
 
 {-
 runTCPServer :: Maybe HostName -> ServiceName -> (Socket -> IO a) -> IO a

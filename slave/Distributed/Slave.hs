@@ -2,6 +2,11 @@
 
 module Distributed.Slave where
 
-import Network.Socket
+import           Distributed.Networking
+import           Network.Socket
+
+a :: Request
+a = Request (SInt 10) "123" "1234"
+
 
 -- startServer :: HostName -> IO ()

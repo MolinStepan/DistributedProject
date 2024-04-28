@@ -12,8 +12,8 @@
     packages.${system} = {
       default = pkgs.mkShell{
         buildInputs = [
-          pkgs.postgresql_16
-          pkgs.redis
+          # pkgs.postgresql_16
+          # pkgs.redis
           pkgs.cabal-install
           pkgs.ghc
         ];

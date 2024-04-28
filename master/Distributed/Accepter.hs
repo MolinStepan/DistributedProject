@@ -3,77 +3,78 @@
 module Distributed.Accepter where
 
 import           Control.Concurrent
-import qualified Control.Exception         as E
+import qualified Control.Exception        as E
 import           Control.Monad
-import qualified Data.Set                  as Set
-import           Distributed.Networking
-import           Parsers
-import qualified Data.ByteString           as B
+import qualified Data.ByteString          as B
+import qualified Data.Set                 as Set
 import           Distributed.Master
-import Distributed.Serializable
+import           Distributed.Networking
+import           Distributed.Serializable
+import           Parsers
 
 -- accepter = undefined
 
-accepter :: SocketPassive
+runAccepter :: SocketAccepter
          -> Int
          -> Chan Request
          -> Chan RequestResult
          -> Chan RequestResult
          -> Chan Slave
          -> IO ()
-accepter sock port pool success error disconnected = forever $
+runAccepter sock port pool success error disconnected = forever $
   E.bracketOnError
     (accept sock)
-    (closep . fst)
-    (\(conn, _) -> forkFinally (serverAction conn) (const $ gclosep conn port))
+    (close . fst)
+    (\(conn, _) -> forkFinally (serverAction conn) (const $ gracefulClose conn {-port-}))
   where
     serverAction conn = handleSlave conn port (Slave 1) pool disconnected
 
 
 
-handleSlave :: SocketPassive -> Int -> Slave -> Chan Request -> Chan Slave -> IO ()
+handleSlave :: SocketM -> Int -> Slave -> Chan Request -> Chan Slave -> IO ()
 handleSlave sock port id requestPool disconnectedServers = do
   alive <- newMVar ()
   currentlyProcessing <- newMVar Set.empty
   terminate <- newEmptyMVar :: IO (MVar ())
   stopping <- newEmptyMVar :: IO (MVar ())
-  socketMutex <- newEmptyMVar :: IO (MVar())
 
-  t1 <- forkIO $ ping alive terminate socketMutex
+  t1 <- forkIO $ ping alive terminate
   t2 <- forkIO $ sendRequests currentlyProcessing requestPool stopping
   t3 <- forkIO $ acceptSlaveInfo currentlyProcessing alive stopping terminate
   _ <- takeMVar terminate
+
   writeChan disconnectedServers id
-  gclosep sock port
+  gracefulClose sock {-port-}
 
   where
-    ping alive terminate socketMutex = do
-      putMVar socketMutex ()
-      sendToSlave sock "Status"
-      _ <- takeMVar socketMutex
+    ping :: MVar () -> MVar () -> IO ()
+    ping alive terminate = do
+      send sock "Status"
       _ <- takeMVar alive
       threadDelay 300_000_000
       stop <- isEmptyMVar alive
       if stop
         then putMVar terminate ()
-        else ping alive terminate socketMutex
+        else ping alive terminate
 
-    sendRequests :: MVar (Set.Set TaskId) -> Chan Request -> MVar () -> IO ()
+    sendRequests :: MVar (Set.Set SInt) -> Chan Request -> MVar () -> IO ()
     sendRequests currentlyProcessing requestPool stopping = do
       set <- takeMVar currentlyProcessing
       if Set.size set < 5
         then do
         putMVar currentlyProcessing set
-        task <- readChan requestPool 
-        sendToSlave sock (serialize task)
+        Request id task body <- readChan requestPool
+        send sock $ B.concat [serialize id, task, serialize . SInt $ B.length body]
+        send sock $ B.concat [serialize id, body]
         set <- takeMVar currentlyProcessing
-        putMVar currentlyProcessing (Set.insert (requestId task) set)
+        putMVar currentlyProcessing (Set.insert id set)
         else
         putMVar currentlyProcessing set
       threadDelay 1_000_000
 
+    acceptSlaveInfo :: MVar (Set.Set SInt) -> MVar () -> MVar () -> MVar () -> IO ()
     acceptSlaveInfo currentlyProcessing alive stopping terminate = do
-      inp <- hear sock 64
+      inp <- recv sock 64
       if inp == "OK"
         then putMVar alive ()
         else undefined -- there will be completed task or error message

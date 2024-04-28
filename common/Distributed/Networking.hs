@@ -3,40 +3,41 @@
 module Distributed.Networking
   ( openMasterSocket
   , openSlaveSocket
-  , SocketPassive (..)
+  , SocketAccepter (..)
+  , closeAccepter
   , accept
-  , gclosep
-  , sendToSlave
-  , hear
   , SocketM
   , send
   , recv
-  , closep
   , close
   , gracefulClose
-  , RequestHeader (..)
+  , Request (..)
   , SInt (..)
   , RequestResult (..)
   ) where
 
 import           Control.Concurrent
 import qualified Data.ByteString           as B
+import qualified Data.ByteString.Internal  as I
+import           Distributed.Serializable
 import qualified Network.Socket            as S
 import qualified Network.Socket.ByteString as BS
-import qualified Data.ByteString.Internal  as I
-import Distributed.Serializable
-import Parsers
+import           Parsers
 
-data SocketM = SocketM
-  { socket :: !S.Socket
-  , output :: !(Chan B.ByteString)
-  , outputManager :: ThreadId
-  }
+data SocketM
+  = SocketM
+      { socket        :: !S.Socket
+      , output        :: !(Chan B.ByteString)
+      , outputManager :: ThreadId
+      }
 
-newtype SocketPassive = SocketPassive
-  { sock :: S.Socket }
+newtype SocketAccepter
+  = SocketAccepter S.Socket
 
-newtype SInt = SInt Int deriving (Eq, Show, Ord)
+newtype SInt
+  = SInt Int
+  deriving (Eq, Ord, Show)
+
 instance Serializable SInt where
   parser = SInt <$> fixedSizeP 16 int
   serialize (SInt x) = let
@@ -45,24 +46,18 @@ instance Serializable SInt where
     start = B.pack $ replicate n (I.c2w '0')
     in B.concat [start, B.pack $ map I.c2w str]
 
-data RequestHeader = RequestHeader
-  { requestId   :: SInt
-  , taskName :: B.ByteString
-  , bodySize :: SInt
-  } deriving (Eq, Show)
+data Request
+  = Request
+      { requestId :: SInt
+      , taskName  :: B.ByteString
+      , taskBody  :: B.ByteString
+      }
 
-instance Serializable RequestHeader where 
-  serialize (RequestHeader id name len) = B.concat [serialize id, name, serialize len]
-  parser = do
-    tId <- parser
-    head <- fixedSize id 16
-    len <- parser
-    return $ RequestHeader tId head len
-  
-data RequestResult = RequestResult
-  { request :: RequestHeader
-  , result  :: B.ByteString
-  } 
+data RequestResult
+  = RequestResult
+      { request :: SInt
+      , result  :: B.ByteString
+      }
 
 manageOutputs :: Chan B.ByteString -> S.Socket -> IO ()
 manageOutputs chan sock = do
@@ -75,7 +70,10 @@ manageOutputs chan sock = do
     else
       S.gracefulClose sock 30_000_000
 
-openMasterSocket :: String -> IO SocketPassive
+closeAccepter :: SocketAccepter -> Int -> IO ()
+closeAccepter (SocketAccepter sock) = S.gracefulClose sock
+
+openMasterSocket :: String -> IO SocketAccepter
 openMasterSocket port = do
   address <- head <$> S.getAddrInfo
     (Just $ S.defaultHints {
@@ -88,13 +86,7 @@ openMasterSocket port = do
   S.withFdSocket sock S.setCloseOnExecIfNeeded
   S.bind sock $ S.addrAddress address
   S.listen sock 1024
-  return $ SocketPassive sock
-
--- -- TODO rewrite
--- accepter :: SocketPassive -> Chan Slave -> IO ()
--- accepter sock slaveChan = forever $ E.bracketOnError (accept sock) (close . fst)
---         $ \(conn, _peer) -> void $ ︎
---             forkFinally (serverAction conn) (const $ gracefulClose conn 5000)
+  return $ SocketAccepter sock
 
 openSlaveSocket :: String -> String -> IO SocketM
 openSlaveSocket ip port = do
@@ -123,12 +115,9 @@ send :: SocketM -> B.ByteString -> IO ()
 send (SocketM _ chan _) msg =
   writeChan chan msg
 
-accept (SocketPassive sock) = do
-  (s, a) <- S.accept sock
-  return (SocketPassive s, a)
-
-
-closep (SocketPassive sock) = S.close sock
-gclosep (SocketPassive sock) = S.gracefulClose sock
-sendToSlave (SocketPassive sock) = BS.send sock
-hear (SocketPassive sock) = BS.recv sock
+accept :: SocketAccepter -> IO (SocketM, S.SockAddr)
+accept (SocketAccepter sock) = do
+  (sock', addr) <- S.accept sock
+  chan <- newChan
+  threadId <- forkIO $ manageOutputs chan sock'
+  return ((SocketM sock' chan threadId), addr)

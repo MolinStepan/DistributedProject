@@ -23,12 +23,13 @@ module Parsers
 import           Control.Applicative
 import qualified Data.ByteString          as B
 import qualified Data.ByteString.Internal as I
--- import           Data.Char
 import           Data.Word
+-- import           Data.Char
 
 --------------------------------------------------------------------------------------------
 
-newtype Parser a = Parser { runParser :: B.ByteString -> Maybe (B.ByteString, a) }
+newtype Parser a
+  = Parser { runParser :: B.ByteString -> Maybe (B.ByteString, a) }
 
 instance Functor Parser where
   fmap f (Parser g) = Parser $ (fmap . fmap . fmap $ f) g
@@ -163,7 +164,7 @@ fixedSize f n = Parser g
           | otherwise          = do
               let (unparsed, rest) = B.splitAt n inp
               return (rest, f unparsed)
- 
+
 fixedSizeP :: Int -> Parser a -> Parser a
 fixedSizeP n p = fixedSizeP' n (p <* emptyString)
 
